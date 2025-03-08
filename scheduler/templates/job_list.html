@@ -1,0 +1,109 @@
+{% extends 'base.html' %}
+
+{% block title %}My Jobs - Job Scheduler{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h1>My Jobs</h1>
+    <a href="{% url 'submit_job' %}" class="btn btn-primary">Submit New Job</a>
+</div>
+
+<!-- Status Filter -->
+<div class="card mb-4">
+    <div class="card-body">
+        <div class="btn-group" role="group">
+            <a href="{% url 'job_list' %}" class="btn btn-outline-secondary {% if not request.GET.status %}active{% endif %}">All</a>
+            <a href="{% url 'job_list' %}?status=pending" class="btn btn-outline-primary {% if request.GET.status == 'pending' %}active{% endif %}">Pending</a>
+            <a href="{% url 'job_list' %}?status=running" class="btn btn-outline-warning {% if request.GET.status == 'running' %}active{% endif %}">Running</a>
+            <a href="{% url 'job_list' %}?status=completed" class="btn btn-outline-success {% if request.GET.status == 'completed' %}active{% endif %}">Completed</a>
+            <a href="{% url 'job_list' %}?status=failed" class="btn btn-outline-danger {% if request.GET.status == 'failed' %}active{% endif %}">Failed</a>
+        </div>
+    </div>
+</div>
+
+<!-- Jobs Table -->
+<div class="card shadow">
+    <div class="card-body">
+        <div class="table-responsive">
+            <table id="jobsTable" class="table table-striped">
+                <thead>
+                    <tr>
+                        <th>Name</th>
+                        <th>Priority</th>
+                        <th>Duration</th>
+                        <th>Status</th>
+                        <th>Deadline</th>
+                        <th>Created</th>
+                        <th>Started</th>
+                        <th>Completed</th>
+                        <th>Wait Time</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for job in jobs %}
+                    <tr>
+                        <td>{{ job.name }}</td>
+                        <td>
+                            {% if job.priority == 'high' %}
+                            <span class="badge bg-danger">High</span>
+                            {% elif job.priority == 'medium' %}
+                            <span class="badge bg-info">Medium</span>
+                            {% else %}
+                            <span class="badge bg-secondary">Low</span>
+                            {% endif %}
+                        </td>
+                        <td>{{ job.estimated_duration }} sec</td>
+                        <td>
+                            {% if job.status == 'pending' %}
+                            <span class="badge bg-primary">Pending</span>
+                            {% elif job.status == 'running' %}
+                            <span class="badge bg-warning text-dark">Running</span>
+                            {% elif job.status == 'completed' %}
+                            <span class="badge bg-success">Completed</span>
+                            {% else %}
+                            <span class="badge bg-danger">Failed</span>
+                            {% endif %}
+                        </td>
+                        <td>{{ job.deadline|date:"Y-m-d H:i:s" }}</td>
+                        <td>{{ job.created_at|date:"Y-m-d H:i:s" }}</td>
+                        <td>{{ job.started_at|date:"Y-m-d H:i:s"|default:"-" }}</td>
+                        <td>{{ job.completed_at|date:"Y-m-d H:i:s"|default:"-" }}</td>
+                        <td>{{ job.wait_time|floatformat:2 }} sec</td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="9" class="text-center">No jobs found</td>
+                        <td></td>
+                        <td></td>
+                        <td></td>
+                        <td></td>
+                        <td></td>
+                        <td></td>
+                        <td></td>
+                        <td></td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    $(document).ready(function() {
+        $('#jobsTable').DataTable({
+            order: [[5, 'desc']], // Sort by created date by default
+            pageLength: 10,
+            lengthMenu: [10, 25, 50, 100]
+        });
+        
+        // Auto-refresh the page every 10 seconds
+        setInterval(function() {
+            location.reload();
+        }, 10000);
+    });
+</script>
+{% endblock %}
+

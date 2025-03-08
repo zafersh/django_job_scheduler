@@ -1,0 +1,233 @@
+
+{% extends 'base.html' %}
+
+{% block title %}Dashboard - Job Scheduler{% endblock %}
+
+{% block content %}
+<h1 class="mb-4">Dashboard</h1>
+
+<!-- Status Cards -->
+<div class="row mb-4">
+    <div class="col-md-3">
+        <div class="card card-dashboard bg-primary text-white">
+            <div class="card-body">
+                <h5 class="card-title">Pending Jobs</h5>
+                <h2 class="display-4">{{ pending_jobs }}</h2>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card card-dashboard bg-warning text-dark">
+            <div class="card-body">
+                <h5 class="card-title">Running Jobs</h5>
+                <h2 class="display-4">{{ running_jobs }}</h2>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card card-dashboard bg-success text-white">
+            <div class="card-body">
+                <h5 class="card-title">Completed Jobs</h5>
+                <h2 class="display-4">{{ completed_jobs }}</h2>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card card-dashboard bg-danger text-white">
+            <div class="card-body">
+                <h5 class="card-title">Failed Jobs</h5>
+                <h2 class="display-4">{{ failed_jobs }}</h2>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Analytics -->
+<div class="row">
+    <div class="col-md-6">
+        <div class="card shadow mb-4">
+            <div class="card-header bg-light">
+                <h5 class="mb-0">Average Wait Time</h5>
+            </div>
+            <div class="card-body">
+                <h3>{{ avg_wait_time|floatformat:2 }} seconds</h3>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card shadow mb-4">
+            <div class="card-header bg-light">
+                <h5 class="mb-0">Jobs by Priority</h5>
+            </div>
+            <div class="card-body">
+                <canvas id="priorityChart" width="200" height="200"></canvas>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Recent Jobs -->
+<div class="card shadow">
+    <div class="card-header bg-light d-flex justify-content-between align-items-center">
+        <h5 class="mb-0">Recent Jobs</h5>
+        <a href="{% url 'job_list' %}" class="btn btn-sm btn-primary">View All</a>
+    </div>
+    <div class="card-body">
+        <div class="table-responsive">
+            <table id="recentJobsTable" class="table table-striped">
+                <thead>
+                    <tr>
+                        <th>Name</th>
+                        <th>Priority</th>
+                        <th>Status</th>
+                        <th>Deadline</th>
+                        <th>Created</th>
+                    </tr>
+                </thead>
+                <tbody id="recentJobsBody">
+                    <!-- Populated via AJAX -->
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+    // Initialize DataTable
+    $(document).ready(function() {
+        const table = $('#recentJobsTable').DataTable({
+            pageLength: 5,
+            lengthMenu: [5, 10, 25],
+            order: [[4, 'desc']]
+        });
+        
+        // Load recent jobs
+        loadRecentJobs();
+        
+        // Set up auto-refresh
+        setInterval(function() {
+            loadRecentJobs();
+            updateDashboardStats();
+        }, 5000);
+        
+        // Initialize priority chart
+        const priorityData = {
+            labels: ['High', 'Medium', 'Low'],
+            datasets: [{
+                label: 'Jobs by Priority',
+                data: [
+                    {{ priority_counts.high }},
+                    {{ priority_counts.medium }},
+                    {{ priority_counts.low }}
+                ],
+                backgroundColor: [
+                    'rgba(255, 99, 132, 0.7)',
+                    'rgba(54, 162, 235, 0.7)',
+                    'rgba(255, 206, 86, 0.7)'
+                ],
+                borderColor: [
+                    'rgba(255, 99, 132, 1)',
+                    'rgba(54, 162, 235, 1)',
+                    'rgba(255, 206, 86, 1)'
+                ],
+                borderWidth: 1
+            }]
+        };
+        
+        const priorityChart = new Chart(
+            document.getElementById('priorityChart'),
+            {
+                type: 'pie',
+                data: priorityData,
+                options: {
+                    responsive: true,
+                    plugins: {
+                        legend: {
+                            position: 'right',
+                        }
+                    }
+                }
+            }
+        );
+        
+        function loadRecentJobs() {
+            fetch('/api/jobs/')
+                .then(response => response.json())
+                .then(data => {
+                    // Clear existing table data
+                    table.clear();
+                    
+                    // Add new data
+                    data.forEach(job => {
+                        const statusClass = getStatusClass(job.status);
+                        const priorityClass = getPriorityClass(job.priority);
+                        
+                        table.row.add([
+                            job.name,
+                            `<span class="badge ${priorityClass}">${job.priority}</span>`,
+                            `<span class="badge ${statusClass}">${job.status}</span>`,
+                            formatDateTime(job.deadline),
+                            formatDateTime(job.created_at)
+                        ]);
+                    });
+                    
+                    // Redraw the table
+                    table.draw();
+                })
+                .catch(error => console.error('Error loading jobs:', error));
+        }
+        
+        function updateDashboardStats() {
+            fetch('/api/dashboard-stats/')
+                .then(response => response.json())
+                .then(data => {
+                    // Update status cards
+                    document.querySelector('.bg-primary .display-4').textContent = data.pending_jobs;
+                    document.querySelector('.bg-warning .display-4').textContent = data.running_jobs;
+                    document.querySelector('.bg-success .display-4').textContent = data.completed_jobs;
+                    document.querySelector('.bg-danger .display-4').textContent = data.failed_jobs;
+                    
+                    // Update average wait time
+                    document.querySelector('.col-md-6 h3').textContent = `${data.avg_wait_time.toFixed(2)} seconds`;
+                    
+                    // Update priority chart
+                    priorityChart.data.datasets[0].data = [
+                        data.priority_counts.high,
+                        data.priority_counts.medium,
+                        data.priority_counts.low
+                    ];
+                    priorityChart.update();
+                })
+                .catch(error => console.error('Error updating stats:', error));
+        }
+        
+        function getStatusClass(status) {
+            switch(status) {
+                case 'pending': return 'bg-primary';
+                case 'running': return 'bg-warning text-dark';
+                case 'completed': return 'bg-success';
+                case 'failed': return 'bg-danger';
+                default: return 'bg-secondary';
+            }
+        }
+        
+        function getPriorityClass(priority) {
+            switch(priority) {
+                case 'high': return 'bg-danger';
+                case 'medium': return 'bg-info';
+                case 'low': return 'bg-secondary';
+                default: return 'bg-secondary';
+            }
+        }
+        
+        function formatDateTime(dateString) {
+            const date = new Date(dateString);
+            return date.toLocaleString();
+        }
+    });
+</script>
+{% endblock %}
+
